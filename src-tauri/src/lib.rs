@@ -3,7 +3,7 @@ pub mod services;
 
 use services::notes::{default_store, AppConfig, AppError, Note, NoteMetadata, SaveNoteRequest};
 use std::path::PathBuf;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 
 #[tauri::command]
 fn app_name() -> &'static str {
@@ -181,6 +181,17 @@ async fn open_note_in_editor(app: AppHandle, note_id: String) -> Result<(), AppE
     Ok(())
 }
 
+#[tauri::command]
+fn snap_window_to_edge(app: AppHandle, label: String) -> Result<(), AppError> {
+    let window = app
+        .get_webview_window(&label)
+        .ok_or_else(|| AppError {
+            code: "notFound".into(),
+            message: format!("Window {label} was not found"),
+        })?;
+    desktop::snap_window_to_edge(&window)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -219,7 +230,8 @@ pub fn run() {
             open_notepad_window,
             recycle_notepad_window,
             open_tile_window,
-            open_note_in_editor
+            open_note_in_editor,
+            snap_window_to_edge
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

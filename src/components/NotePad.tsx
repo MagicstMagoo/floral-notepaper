@@ -26,6 +26,7 @@ import {
   startCurrentWindowResize,
 } from "../features/windows/controls";
 import { openNoteInEditor } from "../features/windows/api";
+import { snapWindowToEdge } from "../features/windows/snap";
 import type { ResizeDirection } from "../features/windows/controls";
 import { getConfig } from "../features/settings/api";
 import {
@@ -405,6 +406,27 @@ export function NotePad({
       setErrorMessage(getErrorMessage(error));
     }
   }, [content]);
+
+  useEffect(() => {
+    let snapDebounce = 0;
+
+    const handleSnap = () => {
+      const label = getCurrentWindow().label;
+      void snapWindowToEdge(label).catch(() => undefined);
+    };
+
+    const unlisten = getCurrentWindow()
+      .onMoved(() => {
+        window.clearTimeout(snapDebounce);
+        snapDebounce = window.setTimeout(handleSnap, 250);
+      })
+      .catch(() => undefined);
+
+    return () => {
+      window.clearTimeout(snapDebounce);
+      void unlisten?.then((fn) => fn?.());
+    };
+  }, []);
 
   useEffect(() => {
     function handleSurfaceActionRequest(event: Event) {

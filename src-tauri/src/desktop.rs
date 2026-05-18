@@ -292,6 +292,194 @@ pub fn runtime_config_changes(previous: &AppConfig, next: &AppConfig) -> Runtime
     }
 }
 
+pub fn snap_window_to_edge(window: &tauri::WebviewWindow) -> Result<(), AppError> {
+    const SNAP_THRESHOLD: i32 = 20;
+
+    let Ok(position) = window.outer_position() else {
+        return Ok(());
+    };
+    let Ok(size) = window.outer_size() else {
+        return Ok(());
+    };
+    let Ok(Some(monitor)) = window.current_monitor() else {
+        return Ok(());
+    };
+
+    let mut candidates: Vec<SnapCandidate> = Vec::new();
+
+    // Screen edges
+    let monitor_pos = monitor.position();
+    let monitor_size = monitor.size();
+
+    candidates.push(SnapCandidate {
+        dist: position.x - monitor_pos.x,
+        snap_x: Some(monitor_pos.x),
+        snap_y: None,
+    });
+    candidates.push(SnapCandidate {
+        dist: (monitor_pos.x + monitor_size.width as i32) - (position.x + size.width as i32),
+        snap_x: Some(monitor_pos.x + monitor_size.width as i32 - size.width as i32),
+        snap_y: None,
+    });
+    candidates.push(SnapCandidate {
+        dist: position.y - monitor_pos.y,
+        snap_x: None,
+        snap_y: Some(monitor_pos.y),
+    });
+    candidates.push(SnapCandidate {
+        dist: (monitor_pos.y + monitor_size.height as i32) - (position.y + size.height as i32),
+        snap_x: None,
+        snap_y: Some(monitor_pos.y + monitor_size.height as i32 - size.height as i32),
+    });
+
+    // Other window edges (Windows only)
+    #[cfg(target_os = "windows")]
+    {
+        let our_pid = std::process::id();
+        let win_left = position.x;
+        let win_top = position.y;
+        let win_right = position.x + size.width as i32;
+        let win_bottom = position.y + size.height as i32;
+
+        unsafe {
+            collect_window_edge_candidates(
+                our_pid,
+                win_left,
+                win_top,
+                win_right,
+                win_bottom,
+                &mut candidates,
+            );
+        }
+    }
+
+    let closest = candidates
+        .iter()
+        .filter(|c| c.dist.abs() <= SNAP_THRESHOLD)
+        .min_by_key(|c| c.dist.abs());
+
+    let Some(best) = closest else {
+        return Ok(());
+    };
+
+    let new_x = best.snap_x.unwrap_or(position.x);
+    let new_y = best.snap_y.unwrap_or(position.y);
+
+    let _ = window.set_position(PhysicalPosition::new(new_x, new_y));
+    Ok(())
+}
+
+struct SnapCandidate {
+    dist: i32,
+    snap_x: Option<i32>,
+    snap_y: Option<i32>,
+}
+
+#[cfg(target_os = "windows")]
+unsafe fn collect_window_edge_candidates(
+    our_pid: u32,
+    win_left: i32,
+    win_top: i32,
+    win_right: i32,
+    win_bottom: i32,
+    candidates: &mut Vec<SnapCandidate>,
+) {
+    use windows::Win32::Foundation::LPARAM;
+    use windows::Win32::UI::WindowsAndMessaging::EnumWindows;
+
+    let data = EnumData {
+        our_pid,
+        win_left,
+        win_top,
+        win_right,
+        win_bottom,
+        candidates,
+    };
+
+    let _ = EnumWindows(
+        Some(enum_window_proc),
+        LPARAM(&data as *const EnumData as isize),
+    );
+}
+
+#[cfg(target_os = "windows")]
+struct EnumData<'a> {
+    our_pid: u32,
+    win_left: i32,
+    win_top: i32,
+    win_right: i32,
+    win_bottom: i32,
+    candidates: &'a mut Vec<SnapCandidate>,
+}
+
+#[cfg(target_os = "windows")]
+unsafe extern "system" fn enum_window_proc(
+    hwnd: windows::Win32::Foundation::HWND,
+    lparam: windows::Win32::Foundation::LPARAM,
+) -> windows::core::BOOL {
+    use windows::Win32::Foundation::{RECT, TRUE};
+    use windows::Win32::UI::WindowsAndMessaging::*;
+
+    let data = &mut *(lparam.0 as *mut EnumData);
+
+    if !IsWindowVisible(hwnd).as_bool() {
+        return TRUE;
+    }
+
+    let style = GetWindowLongW(hwnd, GWL_STYLE);
+    let ws_minimize_val: i32 = 0x20000000;
+    if (style & ws_minimize_val) != 0 {
+        return TRUE;
+    }
+
+    let mut pid: u32 = 0;
+    GetWindowThreadProcessId(hwnd, Some(&mut pid));
+    if pid == data.our_pid {
+        return TRUE;
+    }
+
+    let mut rect = RECT::default();
+    if GetWindowRect(hwnd, &mut rect).is_err() {
+        return TRUE;
+    }
+
+    let w = rect.right - rect.left;
+    let h = rect.bottom - rect.top;
+    if w <= 100 || h <= 100 {
+        return TRUE;
+    }
+
+    let dist_to_left = rect.left - data.win_right;
+    data.candidates.push(SnapCandidate {
+        dist: dist_to_left,
+        snap_x: Some(rect.left - (data.win_right - data.win_left)),
+        snap_y: None,
+    });
+
+    let dist_to_right = data.win_left - rect.right;
+    data.candidates.push(SnapCandidate {
+        dist: dist_to_right,
+        snap_x: Some(rect.right),
+        snap_y: None,
+    });
+
+    let dist_to_top = rect.top - data.win_bottom;
+    data.candidates.push(SnapCandidate {
+        dist: dist_to_top,
+        snap_x: None,
+        snap_y: Some(rect.top - (data.win_bottom - data.win_top)),
+    });
+
+    let dist_to_bottom = data.win_top - rect.bottom;
+    data.candidates.push(SnapCandidate {
+        dist: dist_to_bottom,
+        snap_x: None,
+        snap_y: Some(rect.bottom),
+    });
+
+    TRUE
+}
+
 pub fn apply_runtime_config(
     app: &AppHandle,
     previous: &AppConfig,
