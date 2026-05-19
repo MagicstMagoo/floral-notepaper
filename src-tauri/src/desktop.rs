@@ -1392,6 +1392,7 @@ mod tests {
             font_size: 14,
             surface_font_size: 14,
             external_file_auto_save: true,
+            snap_enabled: false,
         };
         let next = AppConfig {
             notes_dir: "D:\\other-notes".into(),
@@ -1407,6 +1408,7 @@ mod tests {
             font_size: 16,
             surface_font_size: 16,
             external_file_auto_save: true,
+            snap_enabled: true,
         };
 
         assert_eq!(

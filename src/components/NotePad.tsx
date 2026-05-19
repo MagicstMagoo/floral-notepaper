@@ -129,6 +129,7 @@ export function NotePad({
   );
   const [tileColorMode, setTileColorMode] = useState<TileColorMode>("system");
   const [surfaceFontSize, setSurfaceFontSize] = useState(14);
+  const [snapEnabled, setSnapEnabled] = useState(false);
   const [tileColor, setTileColor] = useState(() =>
     resolveTileColor("system", normalizeTileColor(initialTileColor)),
   );
@@ -163,6 +164,7 @@ export function NotePad({
         if (!cancelled) {
           setNoteSurfaceAutoSave(loadedConfig.noteSurfaceAutoSave);
           setSurfaceFontSize(loadedConfig.surfaceFontSize ?? 14);
+          setSnapEnabled(loadedConfig.snapEnabled);
           setTileColorRaw(normalizeTileColor(loadedConfig.tileColor));
           setTileColorMode(loadedConfig.tileColorMode ?? "system");
           setTileColor(
@@ -219,6 +221,7 @@ export function NotePad({
       tileColor?: string;
       tileColorMode?: TileColorMode;
       surfaceFontSize?: number;
+      snapEnabled?: boolean;
     }>("config-changed", (event) => {
       const mode = event.payload.tileColorMode ?? tileColorMode;
       const raw = event.payload.tileColor ?? tileColorRaw;
@@ -226,6 +229,7 @@ export function NotePad({
       setTileColorRaw(normalizeTileColor(raw));
       setTileColor(resolveTileColor(mode, raw));
       if (event.payload.surfaceFontSize != null) setSurfaceFontSize(event.payload.surfaceFontSize);
+      if (event.payload.snapEnabled != null) setSnapEnabled(event.payload.snapEnabled);
     });
     return () => {
       void unlisten.then((fn) => fn());
@@ -408,6 +412,8 @@ export function NotePad({
   }, [content]);
 
   useEffect(() => {
+    if (!snapEnabled) return;
+
     let snapDebounce = 0;
 
     const handleSnap = () => {
@@ -426,7 +432,7 @@ export function NotePad({
       window.clearTimeout(snapDebounce);
       void unlisten?.then((fn) => fn?.());
     };
-  }, []);
+  }, [snapEnabled]);
 
   useEffect(() => {
     function handleSurfaceActionRequest(event: Event) {
