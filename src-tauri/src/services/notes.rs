@@ -30,6 +30,8 @@ pub struct AppConfig {
     pub surface_font_size: u32,
     #[serde(default = "default_external_file_auto_save")]
     pub external_file_auto_save: bool,
+    #[serde(default = "default_toggle_visibility_shortcut")]
+    pub toggle_visibility_shortcut: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -491,6 +493,7 @@ impl NoteStore {
             font_size: default_font_size(),
             surface_font_size: default_surface_font_size(),
             external_file_auto_save: default_external_file_auto_save(),
+            toggle_visibility_shortcut: default_toggle_visibility_shortcut(),
         }
     }
 
@@ -767,6 +770,10 @@ fn default_external_file_auto_save() -> bool {
     true
 }
 
+fn default_toggle_visibility_shortcut() -> String {
+    String::new()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -898,6 +905,7 @@ mod tests {
             font_size: 16,
             surface_font_size: 16,
             external_file_auto_save: true,
+            toggle_visibility_shortcut: String::new(),
         };
 
         store.save_config(saved.clone()).expect("save config");

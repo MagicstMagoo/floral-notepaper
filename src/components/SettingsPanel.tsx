@@ -124,6 +124,18 @@ export function SettingsPanel({
         </section>
 
         <section className="space-y-2">
+          <label className="block text-[11px] font-body text-ink-faint">
+            显示/隐藏窗口快捷键
+          </label>
+          <ShortcutRecorder
+            value={config.toggleVisibilityShortcut}
+            onChange={(v) =>
+              setConfigValue("toggleVisibilityShortcut", v)
+            }
+          />
+        </section>
+
+        <section className="space-y-2">
           <ToggleRow
             label="关闭到托盘"
             checked={config.closeToTray}
